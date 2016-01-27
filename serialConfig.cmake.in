@@ -1,0 +1,17 @@
+################################################################################
+# serial source dir
+set( serial_SOURCE_DIR "@CONFIG_SOURCE_DIR@")
+
+################################################################################
+# serial build dir
+set( serial_DIR "@CONFIG_DIR@")
+
+################################################################################
+# Compute paths
+get_filename_component(serial_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+set( serial_INCLUDE_DIR  "@serial_INCLUDE_DIR@" )
+set( serial_INCLUDE_DIRS  "@serial_INCLUDE_DIR@" )
+
+SET( serial_LIBRARIES    @LIBRARY_NAME@ )
+SET( serial_LIBRARY      @LIBRARY_NAME@ )
