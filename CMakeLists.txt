@@ -1,63 +1,34 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(serial)
 
+#######################################################
+## Library sources
 
-if(APPLE)
-	find_library(IOKIT_LIBRARY IOKit)
-	find_library(FOUNDATION_LIBRARY Foundation)
-endif()
-
-## Overide with cmake -DCMAKE_BUILD_TYPE=Debug {dir}
-if( NOT CMAKE_BUILD_TYPE AND NOT _WIN_ )
-   message("Build type not set (defaults to release)")
-   message("-DCMAKE_BUILD_TYPE=Debug for debug")
-   set( CMAKE_BUILD_TYPE Release )
-endif()
-
-string(TOLOWER ${PROJECT_NAME} LIBRARY_NAME)
-
-## Make an uninstall target 
-configure_file(
- 	"${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
-  	"${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
-  	IMMEDIATE @ONLY
+## Header only includes / core headers
+set( INCDIR "include/serial" )
+set( HEADERS
+  ${INCDIR}/serial.h
+  ${INCDIR}/v8stdint.h
 )
-
-add_custom_target(uninstall
-  "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
 
 ## Sources
-set(serial_SRCS
+set(SOURCES
     src/serial.cc
-    include/serial/serial.h
-    include/serial/v8stdint.h
 )
+
 if(APPLE)
     # If OSX
-    list(APPEND serial_SRCS src/impl/unix.cc)
-    list(APPEND serial_SRCS src/impl/list_ports/list_ports_osx.cc)
+    list(APPEND SOURCES src/impl/unix.cc)
+    list(APPEND SOURCES src/impl/list_ports/list_ports_osx.cc)
 elseif(UNIX)
     # If unix
-    list(APPEND serial_SRCS src/impl/unix.cc)
-    list(APPEND serial_SRCS src/impl/list_ports/list_ports_linux.cc)
+    list(APPEND SOURCES src/impl/unix.cc)
+    list(APPEND SOURCES src/impl/list_ports/list_ports_linux.cc)
 else()
     # If windows
-    list(APPEND serial_SRCS src/impl/win.cc)
-    list(APPEND serial_SRCS src/impl/list_ports/list_ports_win.cc)
+    list(APPEND SOURCES src/impl/win.cc)
+    list(APPEND SOURCES src/impl/list_ports/list_ports_win.cc)
 endif()
-
-## Add serial library
-add_library(${PROJECT_NAME} SHARED ${serial_SRCS})
-if(APPLE)
-	target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
-elseif(UNIX)
-	target_link_libraries(${PROJECT_NAME} rt pthread)
-else()
-	target_link_libraries(${PROJECT_NAME} setupapi)
-endif()
-
-## Include headers
-include_directories(include)
 
 ## Examples
 if(BUILD_EXAMPLES)
@@ -67,42 +38,109 @@ if(BUILD_EXAMPLES)
 endif()
 
 ## Tests
-if(BUILD_TESTS)
-    add_subdirectory(tests)
+# Disabled since they depend on catkin
+#if(BUILD_TESTS)
+#    add_subdirectory(tests)
+#endif()
+
+#######################################################
+if(APPLE)
+	find_library(IOKIT_LIBRARY IOKit)
+	find_library(FOUNDATION_LIBRARY Foundation)
 endif()
 
-################################################################################
+#######################################################
+## Add Libraries / Include Directories / Link directories
 
-# Create variables used for exporting (from build tree) in serialConfig.cmake
-SET( serial_LIBRARIES ${LIBRARY_NAME} )
-SET( serial_INCLUDE_DIR ${PROJECT_SOURCE_DIR} )
+## Include headers
+include_directories(include)
 
-# Export package for use from the build tree
-EXPORT( PACKAGE ${PROJECT_NAME} )
+string(TOLOWER ${PROJECT_NAME} LIBRARY_NAME)
+add_library(${LIBRARY_NAME} ${SOURCES} ${HEADERS})
 
-# Create the serialConfig.cmake file for other cmake projects.
-# ... for the build tree
-SET( CONFIG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-SET( CONFIG_DIR ${CMAKE_CURRENT_BINARY_DIR})
-CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/serialConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/serialConfig.cmake @ONLY )
-# ... for the install tree
-SET( CMAKECONFIG_INSTALL_DIR lib/cmake/${PROJECT_NAME} )
-FILE( RELATIVE_PATH REL_INCLUDE_DIR
+if(APPLE)
+	target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
+elseif(UNIX)
+	target_link_libraries(${PROJECT_NAME} rt pthread)
+else()
+	target_link_libraries(${PROJECT_NAME} setupapi)
+endif()
+
+# Project headers trump everything (including any potentially installed Pangolin)
+list(APPEND LIB_INC_DIR  "${PROJECT_SOURCE_DIR}/include;${CMAKE_CURRENT_BINARY_DIR}/include" )
+
+## Generate symbol export helper header on MSVC
+IF(MSVC)
+    string(TOUPPER ${LIBRARY_NAME} LIBRARY_NAME_CAPS)
+    include(GenerateExportHeader)
+    GENERATE_EXPORT_HEADER( ${LIBRARY_NAME}
+        BASE_NAME ${LIBRARY_NAME_CAPS}
+        EXPORT_MACRO_NAME ${LIBRARY_NAME_CAPS}_EXPORT
+        EXPORT_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/include/${LIBRARY_NAME}/${LIBRARY_NAME}_export.h"
+        STATIC_DEFINE ${LIBRARY_NAME_CAPS}_BUILT_AS_STATIC
+    )
+ENDIF()
+
+## Set Special Compiler flags
+if(MSVC)
+  set(CMAKE_CXX_FLAGS "/EHs ${CMAKE_CXX_FLAGS}")
+elseif(CMAKE_COMPILER_IS_GNUCXX)
+  set(CMAKE_CXX_FLAGS "-Wall -Wno-error=deprecated-declarations ${CMAKE_CXX_FLAGS}")
+endif()
+
+#######################################################
+
+# This relative path allows installed files to be relocatable.
+set( CMAKECONFIG_INSTALL_DIR lib/cmake/${PROJECT_NAME} )
+file( RELATIVE_PATH REL_INCLUDE_DIR
     "${CMAKE_INSTALL_PREFIX}/${CMAKECONFIG_INSTALL_DIR}"
-    "${CMAKE_INSTALL_PREFIX}/include" )
-
-SET( serial_INCLUDE_DIR "\${serial_CMAKE_DIR}/${REL_INCLUDE_DIR}" )
-SET( CONFIG_SOURCE_DIR )
-SET( CONFIG_DIR )
-CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/serialConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/serialConfig.cmake @ONLY )
-
-INSTALL(FILES "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/serialConfig.cmake"
-        DESTINATION ${CMAKECONFIG_INSTALL_DIR} )
-install(TARGETS ${LIBRARY_NAME}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    "${CMAKE_INSTALL_PREFIX}/include"
 )
-# Install headers
-INSTALL(FILES include/serial/serial.h include/serial/v8stdint.h
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME})
+
+# Export library for easy inclusion from other cmake projects. APPEND allows
+# call to function even as subdirectory of larger project.
+FILE(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+export( TARGETS ${LIBRARY_NAME}
+        APPEND FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake" )
+
+# Build tree config
+set( EXPORT_LIB_INC_DIR ${LIB_INC_DIR} )
+configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}Config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake @ONLY IMMEDIATE )
+
+# Install tree config
+set( EXPORT_LIB_INC_DIR "\${PROJECT_CMAKE_DIR}/${REL_INCLUDE_DIR}" )
+configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}Config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/${PROJECT_NAME}Config.cmake @ONLY )
+
+# Add package to CMake package registery for use from the build tree
+option( EXPORT_${PROJECT_NAME}
+  "Should the ${PROJECT_NAME} package be exported for use by other software" ON )
+
+if( EXPORT_${PROJECT_NAME} )
+  export( PACKAGE ${PROJECT_NAME} )
+endif()
+
+#######################################################
+## Install headers / targets
+
+install(DIRECTORY ${INCDIR}
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+)
+install(TARGETS ${LIBRARY_NAME}
+  EXPORT ${PROJECT_NAME}Targets
+  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+)
+
+#######################################################
+## Install CMake config
+
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/${PROJECT_NAME}Config.cmake"
+    DESTINATION ${CMAKECONFIG_INSTALL_DIR}
+)
+install(
+    EXPORT ${PROJECT_NAME}Targets DESTINATION ${CMAKECONFIG_INSTALL_DIR}
+)
