@@ -105,6 +105,29 @@ timespec_from_ms (const uint32_t millis)
   return time;
 }
 
+std::string Serial::SerialImpl::findDevice(std::string device_pattern, int index) 
+{
+  // device should be something like /dev/ttyUSB* for linux or
+  //                                 /dev/cu.usbmodem* for MacOS
+  std::string cmd = "find " + device_pattern + " -print 2> /dev/null";
+  FILE* instream = popen(cmd.c_str(), "r");
+
+  if (!instream) {
+	throw SerialException("Unable to open pipe.");
+	return 0;
+  }
+
+  int devfound;
+  char devname[255];
+  for (devfound = -1; devfound < index && fgets(devname, sizeof(devname), instream); ++devfound) {
+	if (devfound >= index) {
+	  devname[strlen(devname) - 1] = '\0';
+	  return std::string(devname);
+	}
+  }
+  return std::string();
+}
+
 Serial::SerialImpl::SerialImpl (const string &port, unsigned long baudrate,
                                 bytesize_t bytesize,
                                 parity_t parity, stopbits_t stopbits,
@@ -154,6 +177,13 @@ Serial::SerialImpl::open ()
 
   reconfigurePort();
   is_open_ = true;
+}
+
+void
+Serial::SerialImpl::openSmart(std::string& pattern, int index = 0) {
+	std::string port = findDevice(pattern, index);
+	setPort(port);
+	open();
 }
 
 void
@@ -805,6 +835,33 @@ Serial::SerialImpl::flushOutput ()
     throw PortNotOpenedException ("Serial::flushOutput");
   }
   tcflush (fd_, TCOFLUSH);
+}
+
+bool
+Serial::SerialImpl::waitForRead(long seconds, long microseconds = 0) {
+	fd_set fds;
+	FD_ZERO(&fds);
+	FD_SET(fd_, &fds);
+
+	struct timeval timeout;
+	timeout.tv_sec = seconds;
+	timeout.tv_usec = microseconds;
+	
+	// Wait up to timeout until data input available.
+	const int res = select(fd + 1, &fds, NULL, NULL, &timeout);
+
+	if (res == 0) {
+		throw SerialException("Read timeout");
+	}
+
+	return res > 0;
+}
+
+void
+Serial::SerialImpl::finishWrite() {
+	if (tcdrain(fd_) < 0) {
+		throw SerialException("Error waiting for write to terminate.");
+	}
 }
 
 void

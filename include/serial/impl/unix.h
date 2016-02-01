@@ -78,6 +78,9 @@ public:
   open ();
 
   void
+  openSmart(std::string pattern, int index = 0);
+  
+  void
   close ();
 
   bool
@@ -106,6 +109,12 @@ public:
 
   void
   flushOutput ();
+
+  bool
+  waitForRead(long seconds, long microseconds = 0);
+
+  void
+  finishWrite();
 
   void
   sendBreak (int duration);
@@ -192,6 +201,8 @@ protected:
   void reconfigurePort ();
 
 private:
+  static std::string findDevice(std::string device_pattern = "", int index = 0);
+
   string port_;               // Path to the file descriptor
   int fd_;                    // The current file descriptor
 

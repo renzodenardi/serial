@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "serial/impl/win.h"
+#include <setupapi.h>
 
 using std::string;
 using std::wstring;
@@ -19,6 +20,45 @@ using serial::flowcontrol_t;
 using serial::SerialException;
 using serial::PortNotOpenedException;
 using serial::IOException;
+
+#ifndef GUID_DEVCLASS_PORTS
+DEFINE_GUID(GUID_DEVCLASS_PORTS, 0x4D36E978, 0xE325, 0x11CE, 0xBF, 0xC1, 0x08, 0x00, 0x2B, 0xE1, 0x03, 0x18);
+#endif
+
+std::string Serial::SerialImpl::findDevice(std::string device_pattern, int index) {
+  int ports_found = 0;
+  std::string PortName = "COM1";
+
+  HDEVINFO hDevInfo = SetupDiGetClassDevs(&GUID_DEVCLASS_PORTS, NULL, NULL, DIGCF_PRESENT);
+
+  SP_DEVINFO_DATA spDevInfoData;
+
+  ZeroMemory(&spDevInfoData, sizeof(SP_DEVINFO_DATA));
+  spDevInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+  BYTE szBuf[2048];
+
+  for (int wIndex = 0; ports_found <= index && SetupDiEnumDeviceInfo(hDevInfo, wIndex, &spDevInfoData); ++wIndex) {
+    // Enumerate device properties
+	//for (int p = 0; p < SPDRP_MAXIMUM_PROPERTY; ++p) {
+	//    SetupDiGetDeviceRegistryProperty(hDevInfo, &spDevInfoData, p, 0L,
+    //        szBuf, 2048, 0);
+    //    std::cout << p << ": " << szBuf << std::endl;
+    //}
+
+    HKEY key = SetupDiOpenDevRegKey(hDevInfo, &spDevInfoData, DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_READ);
+    if (key != INVALID_HANDLE_VALUE) {
+      DWORD buflen = 2048;
+      // Look up ports device name in the registry
+      if (ERROR_SUCCESS == RegGetValue(key, NULL, "PortName", RRF_RT_REG_SZ, NULL, szBuf, &buflen)) {
+	    PortName = std::string((char*)szBuf);
+		++ports_found;
+	  }
+      RegCloseKey(key);
+    }
+  }
+  return PortName;
+}
 
 inline wstring
 _prefix_port_if_needed(const wstring &input)
@@ -275,6 +315,14 @@ Serial::SerialImpl::reconfigurePort ()
 }
 
 void
+Serial::SerialImpl::openSmart(std::string pattern, int index) {
+	std::string port = findDevice(pattern, index);
+	setPort(port);
+	reconfigurePort();
+	open();
+}
+
+void
 Serial::SerialImpl::close ()
 {
   if (is_open_ == true) {
@@ -478,6 +526,18 @@ void
 Serial::SerialImpl::flushOutput ()
 {
   THROW (IOException, "flushOutput is not supported on Windows.");
+}
+
+bool
+Serial::SerialImpl::waitForRead(long seconds, long microseconds)
+{
+	THROW(IOException, "waitForRead is not supported on Windows.");
+}
+
+void
+Serial::SerialImpl::finishWrite()
+{
+	THROW(IOException, "finishWrite is not supported on Windows.");
 }
 
 void

@@ -84,6 +84,12 @@ Serial::open ()
 }
 
 void
+Serial::openSmart(std::string pattern, int index)
+{
+  pimpl_->openSmart(pattern, index);
+}
+
+void
 Serial::close ()
 {
   pimpl_->close ();
@@ -366,6 +372,18 @@ void Serial::flushOutput ()
 {
   ScopedWriteLock lock(this->pimpl_);
   pimpl_->flushOutput ();
+}
+
+bool Serial::waitForRead(long seconds, long microseconds)
+{
+	ScopedWriteLock lock(this->pimpl_);
+	return pimpl_->waitForRead(seconds, microseconds);
+}
+
+void Serial::finishWrite()
+{
+	ScopedWriteLock lock(this->pimpl_);
+	pimpl_->finishWrite();
 }
 
 void Serial::sendBreak (int duration)

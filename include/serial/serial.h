@@ -178,7 +178,7 @@ public:
    * \throw std::invalid_argument
    */
   Serial (const std::string &port = "",
-          uint32_t baudrate = 9600,
+          uint32_t baudrate = 115200,
           Timeout timeout = Timeout(),
           bytesize_t bytesize = eightbits,
           parity_t parity = parity_none,
@@ -203,6 +203,21 @@ public:
    */
   void
   open ();
+
+  /*!
+  * Use the pattern to find a matching device and if found attempt to open port.
+  *
+  * \see Serial::Serial
+  * \param pattern e.g. "/dev/ttyUSB*" for linux or "" for win
+  *
+  * \param index port index e.g. 0
+  *
+  * \throw std::invalid_argument
+  * \throw serial::SerialException
+  * \throw serial::IOException
+  */
+  void
+  openSmart(std::string pattern, int index=0);
 
   /*! Gets the open status of the serial port.
    *
@@ -595,6 +610,12 @@ public:
   /*! Flush only the output buffer */
   void
   flushOutput ();
+
+  bool
+  waitForRead(long seconds, long microseconds = 0);
+
+  void
+  finishWrite();
 
   /*! Sends the RS-232 break signal.  See tcsendbreak(3). */
   void
