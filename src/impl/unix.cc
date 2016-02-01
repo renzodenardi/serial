@@ -180,7 +180,7 @@ Serial::SerialImpl::open ()
 }
 
 void
-Serial::SerialImpl::openSmart(std::string& pattern, int index = 0) {
+Serial::SerialImpl::openSmart(std::string pattern, int index) {
 	std::string port = findDevice(pattern, index);
 	setPort(port);
 	open();
@@ -838,7 +838,7 @@ Serial::SerialImpl::flushOutput ()
 }
 
 bool
-Serial::SerialImpl::waitForRead(long seconds, long microseconds = 0) {
+Serial::SerialImpl::waitForRead(long seconds, long microseconds) {
 	fd_set fds;
 	FD_ZERO(&fds);
 	FD_SET(fd_, &fds);
@@ -848,7 +848,7 @@ Serial::SerialImpl::waitForRead(long seconds, long microseconds = 0) {
 	timeout.tv_usec = microseconds;
 	
 	// Wait up to timeout until data input available.
-	const int res = select(fd + 1, &fds, NULL, NULL, &timeout);
+	const int res = select(fd_ + 1, &fds, NULL, NULL, &timeout);
 
 	if (res == 0) {
 		throw SerialException("Read timeout");
